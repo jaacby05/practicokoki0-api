@@ -7,15 +7,15 @@ app.use(cors());
 app.use(express.json());
 
 const MONGO_URI = process.env.MONGO_URI;
-const DB_NAME   = process.env.DB_NAME || 'practicokoki0';
 
 let db;
 
 async function conectarMongo() {
   if (db) return db;
+  // Sin pasar DB_NAME: usa la base que ya viene en la URI (capacitacion)
   const client = await MongoClient.connect(MONGO_URI);
-  db = client.db(DB_NAME);
-  console.log('MongoDB conectado');
+  db = client.db(); // usa la DB definida en la cadena de conexión
+  console.log('MongoDB conectado, DB:', db.databaseName);
   return db;
 }
 
@@ -39,11 +39,12 @@ app.post('/api/opiniones', async (req, res) => {
     await coleccion.insertOne(doc);
     res.json({ success: true, message: 'Opinión guardada' });
   } catch (e) {
+    console.error('POST /api/opiniones error:', e.message);
     res.json({ success: false, error: e.message });
   }
 });
 
-// ── GET /api/integrado/:id — Consulta integrada ──────────────
+// ── GET /api/integrado/:id — Curso (MySQL ya lo trae el PHP) + opiniones MongoDB ──
 app.get('/api/integrado/:id', async (req, res) => {
   try {
     const id_curso = parseInt(req.params.id);
@@ -60,18 +61,18 @@ app.get('/api/integrado/:id', async (req, res) => {
       }
     });
   } catch (e) {
+    console.error('GET /api/integrado error:', e.message);
     res.json({ success: false, error: e.message });
   }
 });
 
-// ── GET /api/reporte/:id — Promedio por característica ───────
+// ── GET /api/reporte/:id — Promedio por característica (aggregation) ──
 app.get('/api/reporte/:id', async (req, res) => {
   try {
     const id_curso = parseInt(req.params.id);
     const database = await conectarMongo();
     const coleccion = database.collection('opiniones_cursos');
 
-    // Aggregation pipeline: desagrupa opiniones y calcula promedio por característica
     const pipeline = [
       { $match: { id_curso } },
       { $unwind: '$opiniones' },
@@ -96,6 +97,7 @@ app.get('/api/reporte/:id', async (req, res) => {
     const promedios = await coleccion.aggregate(pipeline).toArray();
     res.json({ success: true, data: { promedios } });
   } catch (e) {
+    console.error('GET /api/reporte error:', e.message);
     res.json({ success: false, error: e.message });
   }
 });
